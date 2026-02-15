@@ -32,27 +32,26 @@ const HabitTracker = () => {
     return () => clearInterval(checkMidnight);
   }, []);
 
-  const loadHabits = async () => {
-    try {
-      const result = await localStorage.getItem('mukil-habits');
-      if (result && result.value) {
-        setHabits(JSON.parse(result.value));
-      }
-    } catch (error) {
-      console.log('No existing habits found, starting fresh');
-    } finally {
-      setIsLoading(false);
+ const loadHabits = () => {
+  try {
+    const stored = localStorage.getItem('mukil-habits');
+    if (stored) {
+      setHabits(JSON.parse(stored));
     }
-  };
+  } catch (error) {
+    console.error('Error loading habits:', error);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
-  const saveHabits = async (updatedHabits) => {
-    try {
-      await localStorage.setItem('mukil-habits', JSON.stringify(updatedHabits));
-    } catch (error) {
-      console.error('Failed to save habits:', error);
-    }
-  };
-
+ const saveHabits = (updatedHabits) => {
+  try {
+    localStorage.setItem('mukil-habits', JSON.stringify(updatedHabits));
+  } catch (error) {
+    console.error('Error saving habits:', error);
+  }
+};
   const addHabit = () => {
     if (!newHabit.name.trim()) return;
     
