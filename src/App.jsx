@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Archive, Trash2, Check, TrendingUp, Calendar, BarChart3, Award, Target } from 'lucide-react';
+import { Plus, Archive, Trash2, Check, TrendingUp, Calendar, BarChart3, Award, Target, Menu, X, Home } from 'lucide-react';
 
 const HabitTracker = () => {
   const getLocalDateString = (date = new Date()) => {
@@ -16,10 +16,8 @@ const HabitTracker = () => {
   const [archivedHabit, setArchivedHabit] = useState(null);
   const undoTimeoutRef = useRef(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [viewMode, setViewMode] = useState('daily');
-  const [showStats, setShowStats] = useState(false);
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+  const [activePage, setActivePage] = useState('habits');
+  const [isNavigationOpen, setIsNavigationOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState(getLocalDateString());
 
   useEffect(() => {
@@ -58,6 +56,25 @@ const HabitTracker = () => {
     console.error('Error saving habits:', error);
   }
 };
+  const navigateToPage = (page) => {
+    setActivePage(page);
+    setIsNavigationOpen(false);
+    setShowAddForm(false);
+    setEditingHabit(null);
+  };
+
+  const shiftSelectedDate = (days) => {
+    const date = new Date(`${selectedDate}T00:00:00`);
+    date.setDate(date.getDate() + days);
+    setSelectedDate(getLocalDateString(date));
+  };
+
+  const shiftSelectedMonth = (months) => {
+    const date = new Date(`${selectedDate}T00:00:00`);
+    date.setDate(1);
+    date.setMonth(date.getMonth() + months);
+    setSelectedDate(getLocalDateString(date));
+  };
   const addHabit = () => {
     if (!newHabit.name.trim()) return;
     
@@ -178,13 +195,13 @@ const HabitTracker = () => {
     return isCompletedOnDate(completions, date) || isCompletedOnDate(notDoneDates, date);
   };
 
-  const isCompletedToday = (completions) => {
-    const today = getLocalDateString();
-    return completions && completions.includes(today);
-  };
-
   const activeHabits = habits.filter(habit => !habit.archived);
   const archivedHabits = habits.filter(habit => habit.archived);
+  const selectedDateObject = new Date(`${selectedDate}T00:00:00`);
+  const selectedWeekStart = new Date(selectedDateObject);
+  selectedWeekStart.setDate(selectedDateObject.getDate() - selectedDateObject.getDay());
+  const selectedWeekEnd = new Date(selectedWeekStart);
+  selectedWeekEnd.setDate(selectedWeekStart.getDate() + 6);
 
   const getHabitStreak = (habit) => {
     const createdDate = getLocalDateString(new Date(habit.createdAt));
@@ -205,9 +222,7 @@ const HabitTracker = () => {
   };
 
   const getWeeklyProgress = (completions, notDoneDates) => {
-    const today = new Date();
-    const weekStart = new Date(today);
-    weekStart.setDate(today.getDate() - today.getDay());
+    const weekStart = new Date(selectedWeekStart);
     
     let completed = 0;
     let total = 0;
@@ -290,9 +305,7 @@ const HabitTracker = () => {
     return { earnedPoints, maxPoints, percentage };
   };
 
-  const generateCalendarHeatmap = () => {
-    const year = selectedYear;
-    const month = selectedMonth;
+  const generateCalendarHeatmap = (year, month) => {
     const monthName = new Date(year, month, 1).toLocaleString('default', { month: 'long' });
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const firstDayOfWeek = new Date(year, month, 1).getDay();
@@ -396,9 +409,7 @@ const HabitTracker = () => {
     'July', 'August', 'September', 'October', 'November', 'December'
   ];
 
-  const totalCompletionsToday = activeHabits.filter(h => isCompletedToday(h.completions)).length;
   const totalCompletionsOnSelectedDate = activeHabits.filter(h => isCompletedOnDate(h.completions, selectedDate)).length;
-  const totalEvaluatedToday = activeHabits.filter(h => isEvaluatedOnDate(h.completions, h.notDoneDates, getLocalDateString())).length;
   const totalEvaluatedOnSelectedDate = activeHabits.filter(h => isEvaluatedOnDate(h.completions, h.notDoneDates, selectedDate)).length;
   const totalHabits = activeHabits.length;
   const selectedDateCompletionRate = totalEvaluatedOnSelectedDate > 0 ? Math.round((totalCompletionsOnSelectedDate / totalEvaluatedOnSelectedDate) * 100) : 0;
@@ -429,7 +440,15 @@ const HabitTracker = () => {
   const averageCompletion = activeHabits.length > 0 ? Math.round(totalCompletions / activeHabits.length) : 0;
   const habitsOnStreak = activeHabits.filter(habit => getHabitStreak(habit) > 0).length;
 
-  const selectedMonthData = generateMonthData(selectedYear, selectedMonth);
+  const selectedMonthData = generateMonthData(selectedDateObject.getFullYear(), selectedDateObject.getMonth());
+  const calendarMonths = [-1, 0, 1].map(offset => {
+    const date = new Date(selectedDateObject.getFullYear(), selectedDateObject.getMonth() + offset, 1);
+    return {
+      year: date.getFullYear(),
+      month: date.getMonth(),
+      isSelected: offset === 0
+    };
+  });
   const selectedDateScore = calculateDailyScore(selectedDate);
   
   const calculateAverageScore = () => {
@@ -474,61 +493,78 @@ const HabitTracker = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-blue-50 p-3 sm:p-6">
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-blue-50">
+      {isNavigationOpen && (
+        <button
+          aria-label="Close navigation"
+          className="fixed inset-0 z-40 bg-slate-900/30"
+          onClick={() => setIsNavigationOpen(false)}
+        />
+      )}
+
+      <aside className={`fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] bg-white shadow-2xl transition-transform duration-300 ${
+        isNavigationOpen ? 'translate-x-0' : '-translate-x-full'
+      }`}>
+        <div className="flex items-center justify-between border-b border-slate-100 p-5">
+          <div>
+            <div className="text-lg font-bold text-slate-800">Mukil Habits</div>
+            <div className="text-xs text-slate-500">Stay consistent, your way</div>
+          </div>
+          <button
+            aria-label="Close navigation"
+            onClick={() => setIsNavigationOpen(false)}
+            className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+          >
+            <X size={20} />
+          </button>
+        </div>
+        <nav className="space-y-1 p-3">
+          {[
+            { id: 'habits', label: 'Habits', icon: Home },
+            { id: 'weekly', label: 'Weekly', icon: Calendar },
+            { id: 'monthly', label: 'Monthly', icon: Calendar },
+            { id: 'stats', label: 'Statistics', icon: BarChart3 }
+          ].map(item => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.id}
+                onClick={() => navigateToPage(item.id)}
+                className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-semibold transition-colors ${
+                  activePage === item.id
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-600 hover:bg-indigo-50 hover:text-indigo-700'
+                }`}
+              >
+                <Icon size={19} />
+                {item.label}
+              </button>
+            );
+          })}
+        </nav>
+      </aside>
+
+      <div className="mx-auto max-w-5xl p-3 sm:p-6">
         {/* Header */}
         <div className="bg-white rounded-2xl shadow-lg p-4 sm:p-8 mb-4 sm:mb-6">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 gap-3">
+          <div className="flex items-center gap-3 border-b border-slate-100 pb-4 sm:pb-6">
+            <button
+              aria-label="Open navigation"
+              onClick={() => setIsNavigationOpen(true)}
+              className="shrink-0 rounded-xl p-2.5 text-slate-600 hover:bg-indigo-50 hover:text-indigo-700"
+            >
+              <Menu size={22} />
+            </button>
             <div>
               <h1 className="text-2xl sm:text-4xl font-bold text-gray-800 mb-1 sm:mb-2">
                 Welcome, <span className="text-indigo-600">Mukil</span>! 👋
               </h1>
               <p className="text-sm sm:text-base text-gray-600">Building better habits, one day at a time</p>
             </div>
-            <button
-              onClick={() => setShowStats(!showStats)}
-              className="bg-indigo-100 text-indigo-600 px-3 sm:px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-200 transition-colors flex items-center gap-2 w-full sm:w-auto justify-center"
-            >
-              <BarChart3 size={18} />
-              {showStats ? 'Hide' : 'Show'} Stats
-            </button>
-          </div>
-          
-          {/* View Mode Toggle */}
-          <div className="flex gap-2 mb-4 sm:mb-6">
-            <button
-              onClick={() => setViewMode('daily')}
-              className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                viewMode === 'daily' 
-                  ? 'bg-indigo-600 text-white' 
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              Daily
-            </button>
-            <button
-              onClick={() => setViewMode('weekly')}
-              className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                viewMode === 'weekly' 
-                  ? 'bg-indigo-600 text-white' 
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              Weekly
-            </button>
-            <button
-              onClick={() => setViewMode('monthly')}
-              className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                viewMode === 'monthly' 
-                  ? 'bg-indigo-600 text-white' 
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              Monthly
-            </button>
           </div>
 
           {/* Date Selector */}
+          {activePage === 'habits' && (
           <div className="mb-4 sm:mb-6">
             <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-2">
               Select Date to Track:
@@ -551,9 +587,42 @@ const HabitTracker = () => {
               Tracking: <span className="font-semibold text-indigo-600">{new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</span>
             </p>
           </div>
+          )}
+
+          {activePage === 'weekly' && (
+            <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Selected Week</div>
+                <div className="text-base sm:text-lg font-bold text-slate-800">
+                  {selectedWeekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – {selectedWeekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-2 sm:w-auto">
+                <button onClick={() => shiftSelectedDate(-7)} className="rounded-lg bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-100">Previous</button>
+                <button onClick={() => setSelectedDate(getLocalDateString())} className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Today</button>
+                <button onClick={() => shiftSelectedDate(7)} className="rounded-lg bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-100">Next</button>
+              </div>
+            </div>
+          )}
+
+          {(activePage === 'monthly' || activePage === 'stats') && (
+            <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Selected Month</div>
+                <div className="text-base sm:text-lg font-bold text-slate-800">
+                  {selectedDateObject.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-2 sm:w-auto">
+                <button onClick={() => shiftSelectedMonth(-1)} className="rounded-lg bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-100">Previous</button>
+                <button onClick={() => setSelectedDate(getLocalDateString())} className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Today</button>
+                <button onClick={() => shiftSelectedMonth(1)} className="rounded-lg bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-100">Next</button>
+              </div>
+            </div>
+          )}
 
           {/* Daily Score Display */}
-          {activeHabits.length > 0 && selectedDateScore.maxPoints > 0 && (
+          {activePage === 'habits' && activeHabits.length > 0 && selectedDateScore.maxPoints > 0 && (
             <div className={`mb-4 sm:mb-6 p-4 sm:p-6 rounded-xl border-2 ${scoreColor.bg} bg-opacity-10 border-opacity-30`}>
               <div className="flex items-center justify-between mb-3">
                 <div>
@@ -631,7 +700,7 @@ const HabitTracker = () => {
             </div>
           )}
           
-          {activeHabits.length > 0 && selectedDateScore.maxPoints === 0 && (
+          {activePage === 'habits' && activeHabits.length > 0 && selectedDateScore.maxPoints === 0 && (
             <div className="mb-4 sm:mb-6 bg-indigo-50 border-2 border-indigo-100 rounded-xl p-4 sm:p-6 text-center">
               <h3 className="text-base sm:text-lg font-bold text-indigo-700 mb-1">No habits evaluated</h3>
               <p className="text-sm text-indigo-600">Unmarked habits are excused for this date.</p>
@@ -639,7 +708,7 @@ const HabitTracker = () => {
           )}
 
           {/* Stats Cards */}
-          {viewMode === 'daily' && selectedDateScore.maxPoints > 0 && (
+          {activePage === 'habits' && selectedDateScore.maxPoints > 0 && (
             <div className="grid grid-cols-3 gap-2 sm:gap-4">
               <div className="bg-gradient-to-br from-indigo-500 to-purple-500 rounded-xl p-3 sm:p-4 text-white">
                 <div className="flex items-center gap-1 sm:gap-2 mb-1">
@@ -667,7 +736,7 @@ const HabitTracker = () => {
             </div>
           )}
 
-          {viewMode === 'weekly' && (
+          {activePage === 'weekly' && activeHabits.length > 0 && (
             <div className="grid grid-cols-3 gap-2 sm:gap-4">
               <div className="bg-gradient-to-br from-indigo-500 to-purple-500 rounded-xl p-3 sm:p-4 text-white">
                 <div className="flex items-center gap-1 sm:gap-2 mb-1">
@@ -688,14 +757,14 @@ const HabitTracker = () => {
               <div className="bg-gradient-to-br from-orange-500 to-pink-500 rounded-xl p-3 sm:p-4 text-white">
                 <div className="flex items-center gap-1 sm:gap-2 mb-1">
                   <Check size={16} className="sm:w-5 sm:h-5" />
-                  <span className="text-xs opacity-90">Today</span>
+                  <span className="text-xs opacity-90">Selected Date</span>
                 </div>
-                <div className="text-2xl sm:text-3xl font-bold">{totalCompletionsToday}/{totalEvaluatedToday}</div>
+                <div className="text-2xl sm:text-3xl font-bold">{totalCompletionsOnSelectedDate}/{totalEvaluatedOnSelectedDate}</div>
               </div>
             </div>
           )}
 
-          {viewMode === 'monthly' && (
+          {activePage === 'monthly' && activeHabits.length > 0 && (
             <div className="grid grid-cols-3 gap-2 sm:gap-4">
               <div className="bg-gradient-to-br from-indigo-500 to-purple-500 rounded-xl p-3 sm:p-4 text-white">
                 <div className="flex items-center gap-1 sm:gap-2 mb-1">
@@ -716,16 +785,57 @@ const HabitTracker = () => {
               <div className="bg-gradient-to-br from-orange-500 to-pink-500 rounded-xl p-3 sm:p-4 text-white">
                 <div className="flex items-center gap-1 sm:gap-2 mb-1">
                   <Check size={16} className="sm:w-5 sm:h-5" />
-                  <span className="text-xs opacity-90">Today</span>
+                  <span className="text-xs opacity-90">Selected Date</span>
                 </div>
-                <div className="text-2xl sm:text-3xl font-bold">{totalCompletionsToday}/{totalEvaluatedToday}</div>
+                <div className="text-2xl sm:text-3xl font-bold">{totalCompletionsOnSelectedDate}/{totalEvaluatedOnSelectedDate}</div>
               </div>
             </div>
           )}
         </div>
 
-        {/* Statistics Dashboard */}
-        {showStats && activeHabits.length > 0 && (
+        {(activePage === 'weekly' || activePage === 'monthly') && activeHabits.length > 0 && (
+          <div className="space-y-3 sm:space-y-4 mb-4 sm:mb-6">
+            {sortedHabits.map(habit => {
+              const progress = activePage === 'weekly'
+                ? getWeeklyProgress(habit.completions, habit.notDoneDates)
+                : getMonthlyProgress(habit.completions, habit.notDoneDates);
+              const period = activePage === 'weekly' ? 'Weekly' : 'Monthly';
+
+              return (
+                <div key={habit.id} className="bg-white rounded-2xl shadow-lg p-4 sm:p-6">
+                  <div className="flex flex-wrap items-center gap-2 mb-2">
+                    <span className={`${getCategoryColor(habit.category)} text-white text-xs px-3 py-1 rounded-full font-semibold`}>
+                      {habit.category}
+                    </span>
+                    <span className={`${getPriorityColor(habit.priority || 'Medium')} text-white text-xs px-3 py-1 rounded-full font-semibold`}>
+                      {habit.priority || 'Medium'}
+                    </span>
+                  </div>
+                  <h3 className="text-base sm:text-xl font-bold text-gray-800 mb-1">{habit.name}</h3>
+                  {habit.description && <p className="text-xs sm:text-sm text-gray-600 mb-4">{habit.description}</p>}
+                  <div className="flex items-center justify-between text-sm mb-2">
+                    <span className="text-gray-600">{period} Progress</span>
+                    <span className="font-semibold text-indigo-600">
+                      {progress.completed}/{progress.total} evaluated days
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2.5">
+                    <div
+                      className="bg-indigo-600 h-2.5 rounded-full transition-all"
+                      style={{ width: `${progress.percentage}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">
+                    {progress.total > 0 ? `${progress.percentage}% complete` : 'No evaluated days yet'}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Statistics Page */}
+        {activePage === 'stats' && activeHabits.length > 0 && (
           <div className="bg-white rounded-2xl shadow-lg p-4 sm:p-8 mb-4 sm:mb-6">
             <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-4 sm:mb-6 flex items-center gap-2">
               <Award className="text-indigo-600" size={20} />
@@ -760,31 +870,11 @@ const HabitTracker = () => {
             {/* Month/Year Selector */}
             <div className="mb-4 sm:mb-6">
               <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-3">Monthly Overview</h3>
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4 mb-4">
-                <select
-                  value={selectedYear}
-                  onChange={(e) => setSelectedYear(Number(e.target.value))}
-                  className="px-3 sm:px-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  {[2024, 2025, 2026, 2027].map(year => (
-                    <option key={year} value={year}>{year}</option>
-                  ))}
-                </select>
-                <select
-                  value={selectedMonth}
-                  onChange={(e) => setSelectedMonth(Number(e.target.value))}
-                  className="flex-1 px-3 sm:px-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  {monthNames.map((name, index) => (
-                    <option key={index} value={index}>{name}</option>
-                  ))}
-                </select>
-              </div>
               
               <div className="bg-indigo-50 rounded-xl p-4 sm:p-6">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm sm:text-base text-gray-700 font-semibold">
-                    {monthNames[selectedMonth]} {selectedYear}
+                    {monthNames[selectedDateObject.getMonth()]} {selectedDateObject.getFullYear()}
                   </span>
                   <span className="text-sm sm:text-base text-indigo-600 font-bold">
                     {selectedMonthData.completed}/{selectedMonthData.total} days
@@ -800,45 +890,61 @@ const HabitTracker = () => {
               </div>
             </div>
 
-            {/* Activity Heatmap - Calendar Style for Selected Month */}
-            <div className="mb-4 sm:mb-6">
-              <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-3">Activity Calendar - {monthNames[selectedMonth]} {selectedYear}</h3>
-              <div className="bg-gray-50 rounded-lg p-2 sm:p-3">
-                <div className="grid grid-cols-7 gap-0.5 sm:gap-1 text-xs text-gray-500 mb-1">
-                  <div className="text-center">S</div>
-                  <div className="text-center">M</div>
-                  <div className="text-center">T</div>
-                  <div className="text-center">W</div>
-                  <div className="text-center">T</div>
-                  <div className="text-center">F</div>
-                  <div className="text-center">S</div>
-                </div>
-                {generateCalendarHeatmap().weeks.map((week, weekIdx) => (
-                  <div key={weekIdx} className="grid grid-cols-7 gap-0.5 sm:gap-1 mb-0.5 sm:mb-1">
-                    {week.map((day, dayIdx) => (
-                      <div
-                        key={dayIdx}
-                        className={`aspect-square rounded flex items-center justify-center text-xs ${
-                          day 
-                            ? `${getHeatmapColor(day.percentage, day.total)} cursor-pointer hover:ring-1 hover:ring-indigo-400`
-                            : 'bg-transparent'
-                        }`}
-                        title={day ? `${day.date}: ${day.count}/${day.total} habits (${day.percentage}%)` : ''}
-                      >
-                        {day && <span className="text-white font-medium text-xs">{day.day}</span>}
+            {/* Activity Heatmap - Previous, Selected, and Next Month */}
+            <div className="mb-4 sm:mb-6 max-w-2xl mx-auto">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-3">Activity Calendar</h3>
+              <div className="space-y-3">
+                {calendarMonths.map(({ year, month, isSelected }) => {
+                  const calendar = generateCalendarHeatmap(year, month);
+                  const sizeClasses = isSelected
+                    ? 'gap-1 text-xs sm:text-sm'
+                    : 'gap-0.5 text-[10px] sm:text-xs';
+
+                  return (
+                    <div key={`${year}-${month}`} className={`rounded-xl border ${
+                      isSelected ? 'max-w-md mx-auto border-indigo-200 bg-indigo-50 p-2 sm:p-3 shadow-sm' : 'max-w-xs mx-auto border-slate-100 bg-slate-50 p-1.5 opacity-85'
+                    }`}>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className={`font-semibold ${isSelected ? 'text-indigo-800 text-sm sm:text-base' : 'text-slate-600 text-xs sm:text-sm'}`}>
+                          {calendar.name} {calendar.year}
+                        </span>
+                        {isSelected && <span className="text-xs font-semibold text-indigo-600">Selected month</span>}
                       </div>
-                    ))}
-                  </div>
-                ))}
+                      <div className={`grid grid-cols-7 ${sizeClasses} text-slate-500 mb-1`}>
+                        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((label, index) => (
+                          <div key={`${label}-${index}`} className="text-center">{label}</div>
+                        ))}
+                      </div>
+                      {calendar.weeks.map((week, weekIdx) => (
+                        <div key={weekIdx} className={`grid grid-cols-7 ${sizeClasses} mb-0.5`}>
+                          {week.map((day, dayIdx) => (
+                            <button
+                              key={dayIdx}
+                              className={`${isSelected ? 'aspect-square' : 'h-4 sm:h-5'} rounded flex items-center justify-center ${
+                                day ? `${getHeatmapColor(day.percentage, day.total)} hover:ring-1 hover:ring-indigo-400` : 'bg-transparent'
+                              }`}
+                              onClick={() => day && (setSelectedDate(day.date), navigateToPage('habits'))}
+                              disabled={!day}
+                              aria-label={day ? `Open habits for ${day.date}: ${day.count} of ${day.total} completed` : undefined}
+                              title={day ? `${day.date}: ${day.count}/${day.total} habits (${day.percentage}%)` : ''}
+                            >
+                              {day && <span className="text-white font-medium">{day.day}</span>}
+                            </button>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
               </div>
-              <div className="flex items-center gap-2 sm:gap-4 mt-3 sm:mt-4 text-xs text-gray-600 justify-center">
+              <div className="flex items-center gap-2 sm:gap-4 mt-3 text-xs text-gray-600 justify-center">
                 <span>Poor</span>
                 <div className="flex gap-1">
-                  <div className="w-3 h-3 sm:w-4 sm:h-4 bg-gray-100 rounded" />
-                  <div className="w-3 h-3 sm:w-4 sm:h-4 bg-red-500 rounded" />
-                  <div className="w-3 h-3 sm:w-4 sm:h-4 bg-orange-500 rounded" />
-                  <div className="w-3 h-3 sm:w-4 sm:h-4 bg-yellow-500 rounded" />
-                  <div className="w-3 h-3 sm:w-4 sm:h-4 bg-green-500 rounded" />
+                  <div className="w-3 h-3 bg-gray-100 rounded" />
+                  <div className="w-3 h-3 bg-red-500 rounded" />
+                  <div className="w-3 h-3 bg-orange-500 rounded" />
+                  <div className="w-3 h-3 bg-yellow-500 rounded" />
+                  <div className="w-3 h-3 bg-green-500 rounded" />
                 </div>
                 <span>Excellent</span>
               </div>
@@ -874,6 +980,15 @@ const HabitTracker = () => {
           </div>
         )}
 
+        {activePage !== 'habits' && activeHabits.length === 0 && (
+          <div className="bg-white rounded-2xl shadow-lg p-8 sm:p-12 text-center">
+            <h2 className="text-xl font-bold text-gray-800 mb-2">No active habits to summarize</h2>
+            <p className="text-sm text-gray-600">Add or restore a habit to see this page’s insights.</p>
+          </div>
+        )}
+
+        {activePage === 'habits' && (
+        <>
         {/* Add Habit Button */}
         {!showAddForm && !editingHabit && (
           <button
@@ -964,8 +1079,6 @@ const HabitTracker = () => {
               const completed = isCompletedOnDate(habit.completions, selectedDate);
               const notDone = isCompletedOnDate(habit.notDoneDates, selectedDate);
               const streak = getHabitStreak(habit);
-              const weeklyProgress = getWeeklyProgress(habit.completions, habit.notDoneDates);
-              const monthlyProgress = getMonthlyProgress(habit.completions, habit.notDoneDates);
               const isToday = selectedDate === getLocalDateString();
               
               return (
@@ -990,47 +1103,9 @@ const HabitTracker = () => {
                         <p className="text-xs sm:text-sm text-gray-600">{habit.description}</p>
                       )}
                       
-                      <div className="mt-2 sm:mt-3 space-y-2">
-                        {viewMode === 'daily' && (
-                          <p className="text-xs sm:text-sm text-gray-500">
-                            Current streak: {streak} completed {streak === 1 ? 'day' : 'days'}
-                          </p>
-                        )}
-                        {viewMode === 'weekly' && (
-                          <div>
-                            <div className="flex items-center justify-between text-xs sm:text-sm mb-1">
-                              <span className="text-gray-600">Weekly Progress</span>
-                              <span className="font-semibold text-indigo-600">
-                                {weeklyProgress.completed}/{weeklyProgress.total} days
-                              </span>
-                            </div>
-                            <div className="w-full bg-gray-200 rounded-full h-2">
-                              <div 
-                                className="bg-indigo-600 h-2 rounded-full transition-all"
-                                style={{ width: `${weeklyProgress.percentage}%` }}
-                              />
-                            </div>
-                            <p className="text-xs text-gray-500 mt-1">{weeklyProgress.percentage}% complete</p>
-                          </div>
-                        )}
-                        {viewMode === 'monthly' && (
-                          <div>
-                            <div className="flex items-center justify-between text-xs sm:text-sm mb-1">
-                              <span className="text-gray-600">Monthly Progress</span>
-                              <span className="font-semibold text-indigo-600">
-                                {monthlyProgress.completed}/{monthlyProgress.total} days
-                              </span>
-                            </div>
-                            <div className="w-full bg-gray-200 rounded-full h-2">
-                              <div 
-                                className="bg-indigo-600 h-2 rounded-full transition-all"
-                                style={{ width: `${monthlyProgress.percentage}%` }}
-                              />
-                            </div>
-                            <p className="text-xs text-gray-500 mt-1">{monthlyProgress.percentage}% complete</p>
-                          </div>
-                        )}
-                      </div>
+                      <p className="mt-2 sm:mt-3 text-xs sm:text-sm text-gray-500">
+                        Current streak: {streak} completed {streak === 1 ? 'day' : 'days'}
+                      </p>
                     </div>
                     <div className="flex items-center gap-1">
                       <button
@@ -1109,6 +1184,8 @@ const HabitTracker = () => {
               ))}
             </div>
           </div>
+        )}
+        </>
         )}
       </div>
     </div>
