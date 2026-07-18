@@ -590,7 +590,7 @@ const HabitTracker = () => {
           )}
 
           {activePage === 'weekly' && (
-            <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="mt-4 sm:mt-6 mb-4 sm:mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
                 <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Selected Week</div>
                 <div className="text-base sm:text-lg font-bold text-slate-800">
@@ -606,7 +606,7 @@ const HabitTracker = () => {
           )}
 
           {(activePage === 'monthly' || activePage === 'stats') && (
-            <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="mt-4 sm:mt-6 mb-4 sm:mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
                 <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Selected Month</div>
                 <div className="text-base sm:text-lg font-bold text-slate-800">
