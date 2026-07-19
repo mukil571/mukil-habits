@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Archive, Trash2, Check, TrendingUp, Calendar, BarChart3, Award, Target, Menu, X, Home, Sun, Moon } from 'lucide-react';
+import { Plus, Archive, Trash2, Check, TrendingUp, Calendar, BarChart3, Award, Target, Menu, X, Home, Sun, Moon, Download, Upload } from 'lucide-react';
 
 const HabitTracker = () => {
   const getLocalDateString = (date = new Date()) => {
@@ -15,6 +15,8 @@ const HabitTracker = () => {
   const [editingHabit, setEditingHabit] = useState(null);
   const [archivedHabit, setArchivedHabit] = useState(null);
   const undoTimeoutRef = useRef(null);
+  const importInputRef = useRef(null);
+  const [dataFeedback, setDataFeedback] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [activePage, setActivePage] = useState('habits');
   const [isNavigationOpen, setIsNavigationOpen] = useState(false);
@@ -66,6 +68,40 @@ const HabitTracker = () => {
     console.error('Error saving habits:', error);
   }
 };
+  const exportHabits = () => {
+    const backup = new Blob([JSON.stringify(habits, null, 2)], { type: 'application/json' });
+    const downloadUrl = URL.createObjectURL(backup);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = `mukil-habits-backup-${getLocalDateString()}.json`;
+    link.click();
+    URL.revokeObjectURL(downloadUrl);
+    setDataFeedback(`Exported ${habits.length} habit${habits.length === 1 ? '' : 's'}.`);
+  };
+
+  const importHabits = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    try {
+      const importedHabits = JSON.parse(await file.text());
+      const isValid = Array.isArray(importedHabits) && importedHabits.every(habit =>
+        habit && typeof habit.id === 'string' && typeof habit.name === 'string' &&
+        Array.isArray(habit.completions) && typeof habit.createdAt === 'string' &&
+        (habit.notDoneDates === undefined || Array.isArray(habit.notDoneDates))
+      );
+
+      if (!isValid) throw new Error('Invalid backup');
+      if (!window.confirm(`Replace all current habits with ${importedHabits.length} imported habit${importedHabits.length === 1 ? '' : 's'}? This cannot be undone.`)) return;
+
+      setHabits(importedHabits);
+      saveHabits(importedHabits);
+      setDataFeedback(`Imported ${importedHabits.length} habit${importedHabits.length === 1 ? '' : 's'}.`);
+    } catch {
+      setDataFeedback('Import failed. Choose a valid Habit Tracker backup file.');
+    }
+  };
   const navigateToPage = (page) => {
     setActivePage(page);
     setIsNavigationOpen(false);
@@ -577,6 +613,17 @@ const HabitTracker = () => {
               Dark
             </button>
           </div>
+        </div>
+        <div className="border-t border-[var(--border)] px-3 py-4">
+          <div className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Data</div>
+          <button onClick={exportHabits} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]">
+            <Download size={16} /> Export backup
+          </button>
+          <button onClick={() => importInputRef.current?.click()} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]">
+            <Upload size={16} /> Import backup
+          </button>
+          <input ref={importInputRef} type="file" accept="application/json,.json" className="hidden" onChange={importHabits} />
+          {dataFeedback && <p className="px-3 pt-2 text-xs text-[var(--text-muted)]" role="status">{dataFeedback}</p>}
         </div>
       </aside>
 
